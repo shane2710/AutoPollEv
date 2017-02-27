@@ -2,9 +2,10 @@
 
 import requests
 import os
+import re
 import sys
 
-## python script to login to Poll Everywhere and automate poll submissions
+## python script to manipulate and automate Poll Everywhere responses
 
 # define some constants
 hash = 182936859384     # as far as I can tell, any 12 digit number works
@@ -13,6 +14,8 @@ USER_URL = 'https://pollev.com/proxy/api/users/search?login_or_email={}&_={}'
 LOGIN_URL = 'https://pollev.com/proxy/api/sessions'
 TOKEN_URL = 'https://pollev.com/proxy/api/csrf_token?_={}'
 REFERER_URL = 'https://pollev.com/login'
+POLL_URL = [ 'https://firehose-production.polleverywhere.com/users/{}/activity/current.json?last_message_sequence=0&_={}',
+        'https://pollev.com/proxy/api/polls/{}?_={}' ]
 
 
 # obtain site cookies first - return integer based on success of retrieval
@@ -95,20 +98,60 @@ def get_token():
         return csrf_token
 
 
+# get the actual poll's data url from the provided web url
+def get_poll_hardlink(poll_profile):
+    global hash
+    print 'Obtaining poll hardlink...'
+    response = s.get(POLL_URL[0].format(poll_profile,hash))
+
+    if response.status_code == 200:
+        response_json = response.json()
+        data_url = re.search('".{15}"',response_json['message'])
+
+        # remove the quotes surrounding the value needed by indexing the string
+        fixed_data_url = data_url.group(0)[1:16]
+        return fixed_data_url
+
+
+# get poll data and return JSON dictionary object
+def get_poll_data(data_url,target_poll):
+    global hash
+    print 'Downloading current poll data...'
+
+    download_header = {'Referer':'https://pollev.com/{}'.format(target_poll),
+            'Host':'pollev.com',
+            'Connection':'keep-alive'}
+
+    response = s.get(POLL_URL[1].format(data_url,hash), headers=download_header)
+    if response.status_code == 200:
+        print 'Poll data downloaded!'
+        return response.json()
+    else:
+        print 'Poll data not found.  Response status {}'.format(response.status_code)
+        print response.text
+        sys.exit(1)
+
+
 ## Program flow
 
 # prompt for username and pass
 user = raw_input('Enter a username: ')
 password = raw_input('Enter the secret password: ')
+target_poll = raw_input('Enter the user hosting target poll: ')
 # user = 'sryan8@nd.edu'
-# password = 'pass'
+# password = ''
+# target_poll = 'shaneryan239'
 
-# start a session in order to keep track of cookies properly
+## start a session in order to keep track of cookies properly
 s = requests.Session()
 
-# start login process
-get_cookies()
-check_user(user)
+## start login process
+get_cookies()       # simple as that
+
+# check if the username provided is valid
+if (check_user(user)):
+    sys.exit(1)
+
 csrf_token = get_token()
 login_status = login(user,password,csrf_token)
 
@@ -125,7 +168,17 @@ if login_status > 0:
     else:
         sys.exit(1)
 
+# obtain the desired poll's data link
+data_url = get_poll_hardlink(target_poll)
 
+# download poll data
+my_poll_json = get_poll_data(data_url, target_poll)
+
+# check if the poll is open
+if my_poll_json['multiple_choice_poll']['state'] == 'opened':
+    print 'Poll is open!'
+else:
+    print 'Poll is closed!'
 
 
 
