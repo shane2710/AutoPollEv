@@ -1,0 +1,28 @@
+This login setup seems pretty cumbersome.
+
+So far:
+
+
+Make a HEAD request including the desired username:
+
+- if request returns 200, username exists
+
+- if returns 404, username does not exist
+
+
+To obtain site cookies:
+
+- make GET request with profile?_={some number, most numbers of correct length work}
+
+-- example: `requests.get('https://pollev.com/proxy/api/profile?_=1488143557016')`
+
+----- run the above in s = requests.Session()
+
+
+
+There are multiple POST requests upon login, and one uses an x-csrf-token.
+This token is obtained using a `GET csrf_token?_={some long number probably
+userid}`.  Looks like I'll need to figure out a way to obtain that userid
+number, then request the csrf-token, and use that in my login payload...?
+
+
